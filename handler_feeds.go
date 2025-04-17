@@ -9,17 +9,23 @@ import (
 	"github.com/google/uuid"
 )
 
-func handlerFollowing(s *state, cmd command) error {
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+		if err != nil {
+			return err
+		}
+		return handler(s, cmd, user)
+	}
+
+}
+
+func handlerFollowing(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) > 0 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
 	}
 
-	currUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return err
-	}
-
-	feedFollows, err := s.db.GetFeedFollowsForUser(context.Background(), currUser.ID)
+	feedFollows, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
 	if err != nil {
 		return err
 	}
@@ -33,15 +39,11 @@ func handlerFollowing(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollow(s *state, cmd command) error {
+func handlerFollow(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 1 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
 	}
 	feedURL := cmd.Args[0]
-	currentUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return err
-	}
 
 	currentFeed, err := s.db.GetFeedFromURL(context.Background(), feedURL)
 	if err != nil {
@@ -52,7 +54,7 @@ func handlerFollow(s *state, cmd command) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID:    currentUser.ID,
+		UserID:    user.ID,
 		FeedID:    currentFeed.ID,
 	})
 	if err != nil {
@@ -72,24 +74,20 @@ func handlerFeeds(s *state, cmd command) error {
 	}
 	return nil
 }
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 2 {
 		return fmt.Errorf("usage: %s <name> %s <url>", cmd.Name, cmd.Args[1])
 	}
 	name := cmd.Args[0]
 	feedURL := cmd.Args[1]
-	currentUserName := s.cfg.CurrentUserName
-	currentUser, err := s.db.GetUser(context.Background(), currentUserName)
-	if err != nil {
-		return err
-	}
+
 	newFeed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Name:      name,
 		Url:       feedURL,
-		UserID:    currentUser.ID,
+		UserID:    user.ID,
 	})
 	if err != nil {
 		return err
@@ -99,7 +97,7 @@ func handlerAddFeed(s *state, cmd command) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID:    currentUser.ID,
+		UserID:    user.ID,
 		FeedID:    newFeed.ID,
 	})
 	if err != nil {
