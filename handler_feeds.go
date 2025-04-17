@@ -20,6 +20,23 @@ func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) 
 
 }
 
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <name>", cmd.Name)
+	}
+	feedURL := cmd.Args[0]
+
+	err := s.db.RemoveFeedFollow(context.Background(), database.RemoveFeedFollowParams{
+		Url:    feedURL,
+		UserID: user.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("usage: %s <name>, %s <url>", cmd.Name, feedURL)
+	}
+	fmt.Printf("Successfully removed %s from current user's follows", feedURL)
+	return nil
+}
+
 func handlerFollowing(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) > 0 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
